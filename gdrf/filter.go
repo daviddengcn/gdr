@@ -1,179 +1,113 @@
 package gdrf
 
 import (
-	"github.com/daviddengcn/go-villa" // Hello
+	"bytes"
+	"fmt"
+	"github.com/daviddengcn/go-villa"
+	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/printer"
 	"go/token"
-	"go/ast"
 	"io"
 	"os"
-	"fmt"
-	"bytes"
 	"strconv"
 )
 
-func init() {
-	_ = os.Stdin
-	_ = fmt.Println
-	_ = printer.Fprint
+const (
+	pt_VAR = iota
+	pt_TYPE
+)
+
+type Placeholder struct {
+	tp   int
+	name string
 }
 
-var standardVars map[string]string = map[string]string{
-"archive": "archive.",
-"archive/tar": "tar.",
-"archive/zip": "zip.",
-"bufio": "bufio.",
-"builtin": "builtin.",
-"bytes": "bytes.",
-"compress": "compress.",
-"compress/bzip2": "bzip2.",
-"compress/flate": "flate.",
-"compress/gzip": "gzip.",
-"compress/lzw": "lzw.",
-"compress/testdata": "testdata.",
-"compress/zlib": "zlib.",
-"container": "container.",
-"container/heap": "heap.",
-"container/list": "list.",
-"container/ring": "ring.",
-"crypto": "crypto.",
-"crypto/aes": "aes.",
-"crypto/cipher": "cipher.",
-"crypto/des": "des.",
-"crypto/dsa": "dsa.",
-"crypto/ecdsa": "ecdsa.",
-"crypto/elliptic": "elliptic.",
-"crypto/hmac": "hmac.",
-"crypto/md5": "md5.",
-"crypto/rand": "rand.",
-"crypto/rc4": "rc4.",
-"crypto/rsa": "rsa.",
-"crypto/sha1": "sha1.",
-"crypto/sha256": "sha256.",
-"crypto/sha512": "sha512.",
-"crypto/subtle": "subtle.",
-"crypto/tls": "tls.",
-"crypto/x509": "x509.",
-"crypto/x509/pkix": "pkix.",
-"database": "database.",
-"database/sql": "sql.",
-"database/sql/driver": "driver.",
-"debug": "debug.",
-"debug/dwarf": "dwarf.",
-"debug/elf": "elf.",
-"debug/gosym": "gosym.",
-"debug/macho": "macho.",
-"debug/pe": "pe.",
-"encoding": "encoding.",
-"encoding/ascii85": "ascii85.",
-"encoding/asn1": "asn1.",
-"encoding/base32": "base32.",
-"encoding/base64": "base64.",
-"encoding/binary": "binary.",
-"encoding/csv": "csv.",
-"encoding/gob": "gob.",
-"encoding/hex": "hex.",
-"encoding/json": "json.",
-"encoding/pem": "pem.",
-"encoding/xml": "xml.",
-"errors": "errors.",
-"expvar": "expvar.",
-"flag": "flag.",
-"fmt": "fmt.",
-"go": "go.",
-"go/ast": "ast.",
-"go/build": "build.",
-"go/doc": "doc.",
-"go/parser": "parser.",
-"go/printer": "printer.",
-"go/scanner": "scanner.",
-"go/token": "token.",
-"hash": "hash.",
-"hash/adler32": "adler32.",
-"hash/crc32": "crc32.",
-"hash/crc64": "crc64.",
-"hash/fnv": "fnv.",
-"html": "html.",
-"html/template": "template.",
-"image": "image.",
-"image/color": "color.",
-"image/draw": "draw.",
-"image/gif": "gif.",
-"image/jpeg": "jpeg.",
-"image/png": "png.",
-"image/testdata": "testdata.",
-"index": "index.",
-"index/suffixarray": "suffixarray.",
-"io": "io.",
-"io/ioutil": "ioutil.",
-"log": "log.",
-"log/syslog": "syslog.",
-"math": "math.",
-"math/big": "big.",
-"math/cmplx": "cmplx.",
-"math/rand": "rand.",
-"mime": "mime.",
-"mime/multipart": "multipart.",
-"net": "net.",
-"net/http": "http.",
-"net/http/cgi": "cgi.",
-"net/http/fcgi": "fcgi.",
-"net/http/httptest": "httptest.",
-"net/http/httputil": "httputil.",
-"net/http/pprof": "pprof.",
-"net/mail": "mail.",
-"net/rpc": "rpc.",
-"net/rpc/jsonrpc": "jsonrpc.",
-"net/smtp": "smtp.",
-"net/testdata": "testdata.",
-"net/textproto": "textproto.",
-"net/url": "url.",
-"os": "os.",
-"os/exec": "exec.",
-"os/signal": "signal.",
-"os/user": "user.",
-"path": "path.",
-"path/filepath": "filepath.",
-"reflect": "reflect.",
-"regexp": "regexp.",
-"regexp/syntax": "syntax.",
-"regexp/testdata": "testdata.",
-"runtime": "runtime.",
-"runtime/cgo": "cgo.",
-"runtime/debug": "debug.",
-"runtime/pprof": "pprof.",
-"sort": "sort.",
-"strconv": "strconv.",
-"strings": "strings.",
-"sync": "sync.",
-"sync/atomic": "atomic.",
-"syscall": "syscall.",
-"testing": "testing.",
-"testing/iotest": "iotest.",
-"testing/quick": "quick.",
-"text": "text.",
-"text/scanner": "scanner.",
-"text/tabwriter": "tabwriter.",
-"text/template": "template.",
-"text/template/parse": "parse.",
-"time": "time.",
-"unicode": "unicode.",
-"unicode/utf16": "utf16.",
-"unicode/utf8": "utf8.",
-"unsafe": "unsafe."}
+func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
+	for _, decl := range f.Decls {
+		switch d := decl.(type) {
+		case *ast.GenDecl:
+			switch d.Tok {
+			case token.TYPE:
+				for i := range d.Specs {
+					spec := d.Specs[i].(*ast.TypeSpec)
+					name := spec.Name.Name
+					if ast.IsExported(name) {
+						return &Placeholder{tp: pt_TYPE, name: name}
+					}
+				}
+			case token.CONST, token.VAR:
+				for i := range d.Specs {
+					spec := d.Specs[i].(*ast.ValueSpec)
+					for _, ident := range spec.Names {
+						name := ident.Name
+						if ast.IsExported(name) {
+							return &Placeholder{tp: pt_VAR, name: name}
+						}
+					}
+				} // for i
+			}
+		case *ast.FuncDecl:
+			if d.Recv != nil {
+				// ignore methods
+				continue
+			}
 
-func findVar(path string, comments *ast.CommentGroup) string {
+			name := d.Name.Name
+			if ast.IsExported(name) {
+				return &Placeholder{tp: pt_VAR, name: name}
+			}
+		}
+	}
+
+	return nil
+}
+
+func findPlaceholder(name, path string) *Placeholder {
 	path, err := strconv.Unquote(path)
 	if err != nil {
-		return ""
+		fmt.Println(err)
+		return nil
 	}
-	
-	v, ok := standardVars[path]
-	if ok {
-		return v
+
+	pkg, err := build.Import(path, ".", 0)
+	if err != nil {
+		fmt.Println(err)
+		return nil
 	}
-	return ""
+
+	files := villa.NewStrSet(pkg.GoFiles...)
+
+	fs := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fs, pkg.Dir, func(fi os.FileInfo) bool {
+		if fi.IsDir() {
+			return false
+		}
+
+		return files.In(fi.Name())
+	}, 0)
+	if err != nil {
+		return nil
+	}
+
+	p, ok := pkgs[pkg.Name]
+	if !ok {
+		fmt.Println(pkg.Name, "not found in", pkgs)
+		return nil
+	}
+
+	if name == "" {
+		name = p.Name
+	}
+	for _, f := range p.Files {
+		ph := findPlaceholderInFile(fs, f)
+		if ph != nil {
+			ph.name = name + "." + ph.name
+			return ph
+		}
+	}
+	return nil
 }
 
 func FilterFile(inFn villa.Path, out io.Writer) error {
@@ -182,26 +116,51 @@ func FilterFile(inFn villa.Path, out io.Writer) error {
 	if err != nil {
 		return err
 	} // if
-	
-	var initFunc bytes.Buffer
-	initFunc.WriteString(`
-func init() {
-`)
+
+	var phVars, phTypes villa.StrSet
 
 	for _, imp := range f.Imports {
 		//fmt.Printf("%+v\n", imp)
-		fmt.Printf("%s: ", imp.Path.Value)
-		v := findVar(imp.Path.Value, imp.Comment)
-		if len(v) > 0 {
+		//fmt.Printf("%v %s: \n", imp.Name, imp.Path.Value)
+
+		name := ""
+		if imp.Name != nil {
+			name = imp.Name.Name
+		}
+
+		if name == "." || name == "_" {
+			// no need to hold
+			continue
+		}
+		ph := findPlaceholder(name, imp.Path.Value)
+		if ph != nil {
+			switch ph.tp {
+			case pt_VAR:
+				phVars.Put(ph.name)
+
+			case pt_TYPE:
+				phTypes.Put(ph.name)
+			}
+		}
+	}
+
+	var initFunc bytes.Buffer
+	if len(phVars) > 0 {
+		initFunc.WriteString("func _() {\n")
+		for v := range phVars {
 			initFunc.WriteString("\t_ = " + v + "\n")
 		}
-		fmt.Println(v)
-	} // for imp
-	
-	initFunc.WriteString(`}
-`)
-	
-//	(&printer.Config{Mode: printer.RawFormat, Tabwidth: 4}).Fprint(out, fset, f)
+		initFunc.WriteString("}\n")
+	}
+
+	if len(phTypes) > 0 {
+		initFunc.WriteString("type (\n")
+		for t := range phTypes {
+			initFunc.WriteString("\t_ " + t + "\n")
+		}
+		initFunc.WriteString(")\n")
+	}
+	(&printer.Config{Mode: printer.RawFormat, Tabwidth: 4}).Fprint(out, fset, f)
 
 	out.Write(initFunc.Bytes())
 	return nil
