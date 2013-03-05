@@ -40,15 +40,18 @@ func main() {
 	for _, inF := range files {
 		dst := tmpDir.Join(inF)
 		params.Add(dst)
-		dstF, err := dst.Create()
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer dstF.Close()
-		err = gdrf.FilterFile(inF, dstF)
-		if err !=  nil {
-			log.Fatal(err)
-		}
+		func() {
+			dstF, err := dst.Create()
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer dstF.Close()
+			
+			err = gdrf.FilterFile(inF, dstF)
+			if err !=  nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 	
 	// Run it
