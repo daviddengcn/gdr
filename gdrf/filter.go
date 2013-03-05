@@ -24,6 +24,7 @@ type Placeholder struct {
 	name string
 }
 
+// findPlaceholderInFile finds a placeholder in a ast.File
 func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 	for _, decl := range f.Decls {
 		switch d := decl.(type) {
@@ -34,6 +35,7 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 					spec := d.Specs[i].(*ast.TypeSpec)
 					name := spec.Name.Name
 					if ast.IsExported(name) {
+						// Placeholder found
 						return &Placeholder{tp: pt_TYPE, name: name}
 					}
 				}
@@ -43,6 +45,7 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 					for _, ident := range spec.Names {
 						name := ident.Name
 						if ast.IsExported(name) {
+							// Placeholder found
 							return &Placeholder{tp: pt_VAR, name: name}
 						}
 					}
@@ -56,6 +59,7 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 
 			name := d.Name.Name
 			if ast.IsExported(name) {
+				// Placeholder found
 				return &Placeholder{tp: pt_VAR, name: name}
 			}
 		}
@@ -64,6 +68,8 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 	return nil
 }
 
+
+// findPlaceholder finds a placeholder with a name and path
 func findPlaceholder(name, path string) *Placeholder {
 	path, err := strconv.Unquote(path)
 	if err != nil {
@@ -110,6 +116,8 @@ func findPlaceholder(name, path string) *Placeholder {
 	return nil
 }
 
+// FilterFile parses the go file of inFn and output a file with placeholders
+// appended.
 func FilterFile(inFn villa.Path, out io.Writer) error {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, inFn.S(), nil, parser.ParseComments)
@@ -120,9 +128,6 @@ func FilterFile(inFn villa.Path, out io.Writer) error {
 	var phVars, phTypes villa.StrSet
 
 	for _, imp := range f.Imports {
-		//fmt.Printf("%+v\n", imp)
-		//fmt.Printf("%v %s: \n", imp.Name, imp.Path.Value)
-
 		name := ""
 		if imp.Name != nil {
 			name = imp.Name.Name
