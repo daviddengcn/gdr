@@ -120,7 +120,7 @@ func findPlaceholder(name, path string) *Placeholder {
 // appended.
 func FilterFile(inFn villa.Path, out io.Writer) error {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, inFn.S(), nil, parser.ImportsOnly)
+	f, err := parser.ParseFile(fset, inFn.S(), nil, 0)
 	if err != nil {
 		return err
 	} // if
