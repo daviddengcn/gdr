@@ -21,6 +21,8 @@ func main() {
 		s := strings.ToLower(strings.TrimSpace(os.Args[i]))
 		if strings.HasSuffix(s, ".go") {
 			files = append(files, villa.Path(os.Args[i]).Clean())
+		} else {
+			break;
 		}
 	}
 	
@@ -38,7 +40,7 @@ func main() {
 	// Make file list in tmpDir
 	var params villa.StringSlice
 	for _, inF := range files {
-		dst := tmpDir.Join(inF)
+		dst := tmpDir.Join(inF.Base())
 		params.Add(dst)
 		func() {
 			dstF, err := dst.Create()
@@ -46,7 +48,7 @@ func main() {
 				log.Fatal(err)
 			}
 			defer dstF.Close()
-			
+
 			err = gdrf.FilterFile(inF, dstF)
 			if err !=  nil {
 				log.Fatal(err)
