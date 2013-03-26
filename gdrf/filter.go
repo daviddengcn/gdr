@@ -19,13 +19,18 @@ const (
 	pt_TYPE
 )
 
-type Placeholder struct {
+type placeholder struct {
 	tp   int
 	name string
 }
 
+type savedPlaceholder struct {
+	placeholder
+	pkgName string
+}
+
 // findPlaceholderInFile finds a placeholder in a ast.File
-func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
+func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *placeholder {
 	for _, decl := range f.Decls {
 		switch d := decl.(type) {
 		case *ast.GenDecl:
@@ -36,7 +41,7 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 					name := spec.Name.Name
 					if ast.IsExported(name) {
 						// Placeholder found
-						return &Placeholder{tp: pt_TYPE, name: name}
+						return &placeholder{tp: pt_TYPE, name: name}
 					}
 				}
 			case token.CONST, token.VAR:
@@ -46,7 +51,7 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 						name := ident.Name
 						if ast.IsExported(name) {
 							// Placeholder found
-							return &Placeholder{tp: pt_VAR, name: name}
+							return &placeholder{tp: pt_VAR, name: name}
 						}
 					}
 				} // for i
@@ -60,7 +65,7 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 			name := d.Name.Name
 			if ast.IsExported(name) {
 				// Placeholder found
-				return &Placeholder{tp: pt_VAR, name: name}
+				return &placeholder{tp: pt_VAR, name: name}
 			}
 		}
 	}
@@ -68,13 +73,30 @@ func findPlaceholderInFile(fs *token.FileSet, f *ast.File) *Placeholder {
 	return nil
 }
 
+var gPlaceholders map[string]savedPlaceholder = map[string]savedPlaceholder{}
+
+// ClearGlobalCache releases the memory for the global cache of placeholders.
+func ClearGlobalCache() {
+	gPlaceholders = map[string]savedPlaceholder{}
+}
 
 // findPlaceholder finds a placeholder with a name and path
-func findPlaceholder(name, path string) *Placeholder {
+func findPlaceholder(name, path string) *placeholder {
 	path, err := strconv.Unquote(path)
 	if err != nil {
 		fmt.Println(err)
 		return nil
+	}
+
+	// Find in the global cache
+	if sph, ok := gPlaceholders[path]; ok {
+		if name == "" {
+			name = sph.pkgName
+		}
+
+		var ph placeholder = sph.placeholder
+		ph.name = name + "." + ph.name
+		return &ph
 	}
 
 	pkg, err := build.Import(path, ".", 0)
@@ -102,13 +124,17 @@ func findPlaceholder(name, path string) *Placeholder {
 		fmt.Println(pkg.Name, "not found in", pkgs)
 		return nil
 	}
-
+	
 	if name == "" {
 		name = p.Name
 	}
 	for _, f := range p.Files {
 		ph := findPlaceholderInFile(fs, f)
 		if ph != nil {
+			// save the found placeholder to global memory cache
+			gPlaceholders[path] = savedPlaceholder{*ph, p.Name}
+
+			// append the prefix
 			ph.name = name + "." + ph.name
 			return ph
 		}
