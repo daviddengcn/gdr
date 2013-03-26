@@ -118,9 +118,14 @@ func findPlaceholder(name, path string) *Placeholder {
 
 // FilterFile parses the go file of inFn and output a file with placeholders
 // appended.
-func FilterFile(inFn villa.Path, out io.Writer) error {
+//
+// If src != nil, FilterFile parses the source from src and the filename is
+// only used when recording position information. The type of the argument
+// for the src parameter must be string, []byte, or io.Reader.
+// If src == nil, FilterFile parses the file specified by filename.
+func FilterFile(inFn villa.Path, src interface{}, out io.Writer) error {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, inFn.S(), nil, 0)
+	f, err := parser.ParseFile(fset, inFn.S(), src, 0)
 	if err != nil {
 		return err
 	} // if

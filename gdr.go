@@ -49,7 +49,7 @@ func main() {
 			}
 			defer dstF.Close()
 
-			err = gdrf.FilterFile(inF, dstF)
+			err = gdrf.FilterFile(inF, nil, dstF)
 			if err !=  nil {
 				log.Fatal(err)
 			}
